@@ -89,7 +89,7 @@ function ready(error, metaData) {
     let node = netGroup.append("g").attr("class","nodegroup").selectAll(".qnode")
     const zoom = d3.zoom().on("zoom", (event, d) => netGroup.attr("transform",event.transform));
     background.call(zoom);
-    const DATALEN = metaData.length
+    const DATALEN = 2000;//metaData.length
     //console.log({edgeData,metaData})
 
     //const DSubset = metaData.slice(0,5000) //Pre-slicing the data is **Significantly** faster
@@ -101,7 +101,6 @@ function ready(error, metaData) {
 
     let [sliderValMap, dataFeatures, featureMap] = restore(nmData())
 
-    let grpData = ({children: Array.from(d3.group(nmData(), d=> d.group), ([, children])=>({children}))})
     const color = d3.scaleOrdinal(nmData().map(d=>d.group), cat30)
 
     const pack = (gData) => d3.pack()
@@ -109,7 +108,7 @@ function ready(error, metaData) {
         .padding(1)
         (d3.hierarchy(gData).sum(d => d.similarity))//.sort((a, b) =>  a.value - b.value))//.count())
 
-
+    let grpData = ({children: Array.from(d3.group(nmData(), d=> d.group), ([, children])=>({children}))})
     let nodes = pack(grpData).leaves();
     console.log({nodes})
     const simulation = d3.forceSimulation(nodes)
@@ -118,7 +117,7 @@ function ready(error, metaData) {
         .force("y", d3.forceY(HEIGHT / 2).strength(0.01))
         .force("cluster", forceCluster(0.4))
         //.force("collide", d3.forceCollide(d=>d.r*2).strength(1))  // this actually works a bit, but no group separation, so purely relies on color
-        .force("collide", forceCollide(0.4, 10, 30))
+        .force("collide", forceCollide(0.4, 15, 30))
         .force("charge", d3.forceManyBody().strength(d=>d.data.similarity))
         .alphaDecay(0.01)
         .on("tick",tick)
@@ -130,7 +129,6 @@ function ready(error, metaData) {
     }
 
     function getSliderValues(source="valMap"){
-        // Maybe change to actual read from slider properties
 
         //const [nodeMax, ...sliderValues] = d3.selectAll(".slider-group input").nodes().map(d=>+d.value)
         //return [nodeMax, ...sliderValues]
@@ -146,9 +144,10 @@ function ready(error, metaData) {
         return returnData
 
     }
+
     function setSliderValues(sliderValues, maxNode=undefined){
         const numNode = maxNode ?? +slider.property("value")
-        console.log(sliderValues)
+        //console.log(sliderValues)
         const slideGroup = d3.selectAll(".slider-group").data([numNode,...sliderValues])
         slideGroup.select("input").property("value",d=>d)
         slideGroup.select("output").property("value",(d,i)=> i> 0 ? fFormat(d) : d)
@@ -159,16 +158,30 @@ function ready(error, metaData) {
 
     function topN(n){
         const [nMax, ...slideVals] = getSliderValues("valMap")
-        const mostSimilar = [...featureMap].map(([k,v])=>[ML.Similarity.cosine(v,slideVals),k])
+        //const mostSimilar = [...featureMap].map(([k,v])=>[ML.Similarity.cosine(v,slideVals),k])
+        const mostSimilar = [...featureMap].map(([k,v])=>[cosine(v,slideVals),k])
             .sort((a,b)=>b[0]-a[0]).map(d=>d[1]).slice(0,n)
         return nmData().filter((d,i)=>mostSimilar.includes(i))
     }
 
+    function cosine(a, b) {
+        //https://github.com/mljs/distance/blob/master/src/similarities/cosine.js
+        const ii = a.length;
+        let p = 0, p2 = 0, q2 = 0;
+        for (let i = 0; i < ii; i++) {
+            p += a[i] * b[i];
+            p2 += a[i] * a[i];
+            q2 += b[i] * b[i];
+        }
+
+        return p / (Math.sqrt(p2) * Math.sqrt(q2));// || 0; // Falsy eval NaN to 0
+    }
+
     function similarity(d){
-        //TODO: Once 100% sure of distance metric, "borrow" implementation from MLjs and remove library to reduce load
         //const slideDist = ML.Distance.euclidean(extractFeatures(d),[...threshMap.values()])
-        const slideDist = ML.Similarity.cosine(extractFeatures(d),[...sliderValMap.values()])
-        return slideDist
+        const [nMax, ...slideVals] = getSliderValues("valMap")
+        return cosine(extractFeatures(d),slideVals)
+        //return ML.Similarity.cosine(extractFeatures(d),[...sliderValMap.values()])
     }
 
     // const rscale=d3.scalePow().domain([0,1]).range([3,15]).exponent(2)
@@ -231,7 +244,6 @@ function ready(error, metaData) {
 
     function clickRestore(event,d) {
         [sliderValMap, dataFeatures, featureMap] = restore(nmData())
-        //isFilterMode = false
         d3.select("#filter-mode > span").classed("--active",  false)
 
         refresh(nmData(1000))
@@ -297,7 +309,7 @@ function ready(error, metaData) {
     d3.select("#simulation-pause").on('click',clickPause)
 
     function toLabeled(sliderValues){
-        console.assert(sliderValues.length===7)
+        //console.assert(sliderValues.length===7)
         return new Map(d3.zip(LABELS, sliderValues))
     }
 
@@ -334,27 +346,23 @@ function ready(error, metaData) {
         // }
 
         // refresh(ndClone)
-        update();
+        //();
         //simulation.alpha(0.1).restart()
         //console.log({nVal,nodes,links, threshMap})
     }
     console.log({node})
-    slider.on("change", (event, d) => slideFilter("maxnode", event, d))
-    slideDiv.selectAll("input").on("change", (event, d) => slideFilter(d[0], event, d))
+    slider.on("input", (event, d) => slideFilter("maxnode", event, d)).on("change", update)
+    //slider//(event, d) => slideFilter("maxnode", event, d))
+    slideDiv.selectAll("input").on("input", (event, d) => slideFilter(d[0], event, d)).on("change", update)
 
 
     d3.select('.search-inp').on("input", function (event){
-        // if (event.inputType === "deleteContentBackward"){
-        //     curinp=curinp.slice(0,-1)
-        // } else{
-        //     curinp+=event.data
-        // }
-        const inputText = this.value
-        console.log({event,inputText})
+        const inputText = this.value.toLowerCase()
+        //console.log({event,inputText})
         //TODO: Fix this hack and actually filter the nodes non-cosmetically
-        node.filter(d=>d.data.name.toLowerCase().includes(inputText.toLowerCase())).selectAll("circle").classed("--hidden",false)
-        node.filter(d=>!(d.data.name.toLowerCase().includes(inputText.toLowerCase()))).selectAll("circle").classed("--hidden",true)
-        console.log(inputText)
+        node.filter(d=>d.data.name.toLowerCase().includes(inputText)).selectAll("circle").classed("--hidden",false)
+        node.filter(d=>!(d.data.name.toLowerCase().includes(inputText))).selectAll("circle").classed("--hidden",true)
+        //console.log(inputText)
 
     })
 
