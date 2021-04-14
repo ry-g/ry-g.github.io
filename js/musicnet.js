@@ -49,7 +49,7 @@ function restore(initialData){
     slideGroup.select("input").property("value",d=>d)
     slideGroup.select("output").property("value",(d,i)=> i> 0 ? fFormat(d) : d)
     d3.select('#track-count').text(initialNodeCount)
-    console.log({slideMap, dataFeats, featMap})
+    //console.log({slideMap, dataFeats, featMap})
     return [slideMap, dataFeats, featMap]
 }
 
@@ -94,21 +94,20 @@ function ready(error, metaData) {
 
     //const DSubset = metaData.slice(0,5000) //Pre-slicing the data is **Significantly** faster
     //const DATALEN = DSubset.length
-    const nmData = ((n) => JSON.parse(JSON.stringify(metaData.slice(0,n))))
     // This needs to be a function to prevent accidental manipulation of the source data
-    //const nmData = ((n) => JSON.parse(JSON.stringify(DSubset.slice(0,n))))
-    console.log({"nodeMetaData": nmData})
+    const dataCopySlice = ((n) => JSON.parse(JSON.stringify(metaData.slice(0,n))))
+    const dataCopy = ((inds) => JSON.parse(JSON.stringify(metaData.filter((d,i)=>inds.includes(i)))))
 
-    let [sliderValMap, dataFeatures, featureMap] = restore(nmData())
+    console.log({"nodeMetaData": dataCopySlice})
 
-    const color = d3.scaleOrdinal(nmData().map(d=>d.group), cat30)
+    const _initialData = dataCopySlice()
+    let [sliderValMap, dataFeatures, featureMap] = restore(_initialData)
+    const color = d3.scaleOrdinal(_initialData.map(d=>d.group), cat30)
+    let grpData = ({children: Array.from(d3.group(_initialData, d=> d.group), ([, children])=>({children}))})
 
-    const pack = (gData) => d3.pack()
-        .size([WIDTH/2, HEIGHT/2])
-        .padding(1)
+    const pack = (gData) => d3.pack().size([WIDTH/2, HEIGHT/2]).padding(1)
         (d3.hierarchy(gData).sum(d => d.similarity))//.sort((a, b) =>  a.value - b.value))//.count())
 
-    let grpData = ({children: Array.from(d3.group(nmData(), d=> d.group), ([, children])=>({children}))})
     let nodes = pack(grpData).leaves();
     console.log({nodes})
     const simulation = d3.forceSimulation(nodes)
@@ -140,11 +139,10 @@ function ready(error, metaData) {
             const [nodeMax, ...sliderValues] = d3.selectAll(".slider-group input").nodes().map(d=>+d.value)
             returnData = [nodeMax, ...sliderValues]
         }
-        console.log({returnData})
+        //console.log({returnData})
         return returnData
 
     }
-
     function setSliderValues(sliderValues, maxNode=undefined){
         const numNode = maxNode ?? +slider.property("value")
         //console.log(sliderValues)
@@ -159,9 +157,11 @@ function ready(error, metaData) {
     function topN(n){
         const [nMax, ...slideVals] = getSliderValues("valMap")
         //const mostSimilar = [...featureMap].map(([k,v])=>[ML.Similarity.cosine(v,slideVals),k])
-        const mostSimilar = [...featureMap].map(([k,v])=>[cosine(v,slideVals),k])
+
+        const idxMostSimilar = [...featureMap].map(([k,v])=>[cosine(v,slideVals),k])
             .sort((a,b)=>b[0]-a[0]).map(d=>d[1]).slice(0,n)
-        return nmData().filter((d,i)=>mostSimilar.includes(i))
+
+        return dataCopy(idxMostSimilar)//.filter((d,i)=>mostSimilar.includes(i))
     }
 
     function cosine(a, b) {
@@ -174,7 +174,7 @@ function ready(error, metaData) {
             q2 += b[i] * b[i];
         }
 
-        return p / (Math.sqrt(p2) * Math.sqrt(q2));// || 0; // Falsy eval NaN to 0
+        return (p / (Math.sqrt(p2) * Math.sqrt(q2))) || 1e-7; //Falsy eval NaN -> 1e-7
     }
 
     function similarity(d){
@@ -206,7 +206,7 @@ function ready(error, metaData) {
             }
         });
 
-        console.log({grpData,nodes})
+        //console.log({grpData,nodes})
 
         node = node.data(nodes[0].parent !== null ? nodes : [], d => d.data)//.source)
             .join(enter => {
@@ -238,15 +238,15 @@ function ready(error, metaData) {
     }
 
     const [slider,slideDiv] = initializeSliders(sliderValMap, DATALEN)
-    refresh(nmData(1000))
+    refresh(dataCopySlice(1000))
 
     const isFilterMode = () => d3.select("#filter-mode > span").classed("--active");
 
     function clickRestore(event,d) {
-        [sliderValMap, dataFeatures, featureMap] = restore(nmData())
+        [sliderValMap, dataFeatures, featureMap] = restore(dataCopySlice())
         d3.select("#filter-mode > span").classed("--active",  false)
 
-        refresh(nmData(1000))
+        refresh(dataCopySlice(1000))
     }
     function clickFilter(event,d){
         //isFilterMode = !isFilterMode
@@ -256,7 +256,7 @@ function ready(error, metaData) {
     function clickMerge(event,d){
         const selData = d3.selectAll('.frozen').data().map(extractFeatures)
         const rowMean = d3.transpose(selData).map(d=>d3.sum(d)/d.length)
-        console.log({selData,rowMean})
+        //console.log({selData,rowMean})
 
         const namedMap = selData.map(t=>d3.zip(LABELS,t).map(([axis,value]) => ({axis,value})))
 
@@ -279,9 +279,7 @@ function ready(error, metaData) {
             .join("button")
             .attr("type","button")
             .classed("btn btn-light btn-sm",true)
-            .on('click',(event,d)=>{
-                setSliderValues(d);
-            })
+            .on('click',(event,d)=>setSliderValues(d))
             .text("Set Sliders")
     }
     function clickPause(event,d) {
@@ -305,17 +303,14 @@ function ready(error, metaData) {
 
     d3.select("#restore-initial").on('click',clickRestore)
     d3.select("#filter-mode").on('click', clickFilter)
-    d3.select("#track-merge").on('click', clickMerge)
+    d3.select("#track-merge").on('click', (e,d) => d3.selectAll('.frozen').data().length > 0 ? clickMerge(e,d) : null)
     d3.select("#simulation-pause").on('click',clickPause)
 
-    function toLabeled(sliderValues){
-        //console.assert(sliderValues.length===7)
-        return new Map(d3.zip(LABELS, sliderValues))
-    }
+    const toLabeled = sliderValues => new Map(d3.zip(LABELS, sliderValues));
 
     function update(){
         const [nodeMax, ...sliderValues] = getSliderValues("raw")
-        console.log({nodeMax, sliderValues})
+        //console.log({nodeMax, sliderValues})
         const namedValues = toLabeled(sliderValues)
         let ndClone = topN(nodeMax)
         if (isFilterMode() === true){
@@ -350,9 +345,8 @@ function ready(error, metaData) {
         //simulation.alpha(0.1).restart()
         //console.log({nVal,nodes,links, threshMap})
     }
-    console.log({node})
+    //console.log({node})
     slider.on("input", (event, d) => slideFilter("maxnode", event, d)).on("change", update)
-    //slider//(event, d) => slideFilter("maxnode", event, d))
     slideDiv.selectAll("input").on("input", (event, d) => slideFilter(d[0], event, d)).on("change", update)
 
 

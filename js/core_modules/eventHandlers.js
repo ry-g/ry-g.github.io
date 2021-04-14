@@ -9,11 +9,13 @@ function radar(data, selector){
         //margin: ({top: 35, right: 75, bottom: 50, left: 75}),
         margin: ({top: 35, right: 40, bottom: 25, left: 50}),
         // margin: ({top: 25, right: 25, bottom: 25, left: 25}),
+        dotRadius: 3, 			//The size of the colored circles of each blog
+        strokeWidth: 1,
         labelFactor: 1.2,
         wrapWidth: 120,
         maxValue: 1.0,
         levels: data.length,
-        color: d3.scaleOrdinal().range(["#EDC951","#CC333F","#00A0B0","#06b000","#a003f5"])
+        color: d3.scaleOrdinal().range(["#EDC951","#CC333F","#00A0B0","#06b000","#a003f5"])//["#EDC951","#a003f5","#06b000","#CC333F","#00A0B0","#a003f5"])
     }
     return RadarChart(selector,data,radarOpts)
 }

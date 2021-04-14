@@ -237,6 +237,7 @@ function RadarChart(id, data, options) {
     //Set up the small tooltip for when you hover over a circle
     const tooltip = g.append("text")
         .attr("class", "tooltip")
+        .classed("point-text",true)
         .style("opacity", 0);
 
     /////////////////////////////////////////////////////////

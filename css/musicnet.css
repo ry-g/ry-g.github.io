@@ -60,7 +60,7 @@ div.spiderchart {
 .spiderchart text.legend {
     fill: whitesmoke;
 }
-.spiderchart text.tooltip {
+.spiderchart .point-text {
     fill: lawngreen;
 }
 
