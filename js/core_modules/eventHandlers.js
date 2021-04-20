@@ -53,49 +53,87 @@ const dragger = (simulation) => {
         .on("drag", dragged)
         .on("end", dragended)
 };
+function populateTrackDisplays(nodeData){
+    const {acousticness,danceability,energy,instrumentalness,liveness,speechiness,valence, ...metaObject} = nodeData;
+    const zoSubData = {acousticness,danceability,energy,instrumentalness,speechiness,liveness,valence};
+    const radarData = Object.entries(zoSubData).map(([axis,value]) => ({axis,value}))
+
+    let baseHtml = ""
+    //const removedFeatures = ["source","year","id"]// "group"
+    const displayOrder = ["name","artists","release_date","explicit","popularity", "duration_ms",
+        "tempo", "loudness", "key", "mode", "group", "similarity"]
+    //for (let [key, val] of Object.entries(metaObject).filter(([k,v])=>!removedFeatures.includes(k))) {
+    for (let key of displayOrder) {
+        let val = metaObject[key]
+        if (key==="artists"){
+            val=val.slice(0,2)
+        }
+        baseHtml += `<li><b>${key}</b>: ${val}</li>`
+    }
+
+    trackInfo.html(baseHtml)
+    const baseUrl = "https://p.scdn.co/mp3-preview/"
+    const trackUrl = nodeData['preview_url'] !== "NA" ? baseUrl+nodeData['preview_url'] : false
+
+    if (trackUrl){
+        trackSample.style("opacity",0.9)
+            .selectAll("audio")
+            .data([trackUrl])
+            .join("audio").attr("src",d=>d).property("controls",true)
+
+    }
+    else {
+        trackSample.style("opacity",0)
+    }
+
+    trackTip.transition().duration(500).ease(d3.easeCubic).style("opacity", 0.9)
+
+    radar([radarData], ".spiderchart")
+}
 
 function nodeEventHandler (node, simulation) {
     function mouseOver(event, d) {
         //if (d.fixed===true) {
         d3.select(this).select("text").classed("--hidden",false)
         const nodeMetaData = d.data
-        const {acousticness,danceability,energy,instrumentalness,liveness,speechiness,valence, ...metaObject} = nodeMetaData;
-        const zoSubData = {acousticness,danceability,energy,instrumentalness,speechiness,liveness,valence};
-        const radarData = Object.entries(zoSubData).map(([axis,value]) => ({axis,value}))
-
-        let baseHtml = ""
-        //const removedFeatures = ["source","year","id"]// "group"
-        const displayOrder = ["name","artists","release_date","explicit","popularity", "duration_ms",
-            "tempo", "loudness", "key", "mode", "group", "similarity"]
-        //for (let [key, val] of Object.entries(metaObject).filter(([k,v])=>!removedFeatures.includes(k))) {
-        for (let key of displayOrder) {
-            let val = metaObject[key]
-            if (key==="artists"){
-                val=val.slice(0,2)
-            }
-            baseHtml += `<li><b>${key}</b>: ${val}</li>`
-        }
-
-        trackInfo.html(baseHtml)
-        const baseUrl = "https://p.scdn.co/mp3-preview/"
-        const trackUrl = nodeMetaData['preview_url'] !== "NA" ? baseUrl+nodeMetaData['preview_url'] : false
-
-        if (trackUrl){
-            trackSample.style("opacity",0.9)
-                .selectAll("audio")
-                .data([trackUrl])
-                .join("audio").attr("src",d=>d).property("controls",true)
-
-        }
-        else {
-            trackSample.style("opacity",0)
-        }
-
-
-        trackTip.transition().duration(500).ease(d3.easeCubic).style("opacity", 0.9)
-
-
-        radar([radarData], ".spiderchart")
+        populateTrackDisplays(nodeMetaData)
+        // const {acousticness,danceability,energy,instrumentalness,liveness,speechiness,valence, ...metaObject} = nodeMetaData;
+        // const zoSubData = {acousticness,danceability,energy,instrumentalness,speechiness,liveness,valence};
+        // const radarData = Object.entries(zoSubData).map(([axis,value]) => ({axis,value}))
+        //
+        // let baseHtml = ""
+        // //const removedFeatures = ["source","year","id"]// "group"
+        // const displayOrder = ["name","artists","release_date","explicit","popularity", "duration_ms",
+        //     "tempo", "loudness", "key", "mode", "group", "similarity"]
+        // //for (let [key, val] of Object.entries(metaObject).filter(([k,v])=>!removedFeatures.includes(k))) {
+        // for (let key of displayOrder) {
+        //     let val = metaObject[key]
+        //     if (key==="artists"){
+        //         val=val.slice(0,2)
+        //     }
+        //     baseHtml += `<li><b>${key}</b>: ${val}</li>`
+        // }
+        //
+        // trackInfo.html(baseHtml)
+        // const baseUrl = "https://p.scdn.co/mp3-preview/"
+        // const trackUrl = nodeMetaData['preview_url'] !== "NA" ? baseUrl+nodeMetaData['preview_url'] : false
+        //
+        // if (trackUrl){
+        //     trackSample.style("opacity",0.9)
+        //         .selectAll("audio")
+        //         .data([trackUrl])
+        //         .join("audio").attr("src",d=>d).property("controls",true)
+        //
+        // }
+        // else {
+        //     trackSample.style("opacity",0)
+        // }
+        //
+        //
+        // trackTip.transition().duration(500).ease(d3.easeCubic).style("opacity", 0.9)
+        //
+        //
+        // radar([radarData], ".spiderchart")
 
     }
 
@@ -169,4 +207,4 @@ function nodeEventHandler (node, simulation) {
         .on("mousemove",null)
 }
 
-export {nodeEventHandler, dragger, radar};
+export {nodeEventHandler, dragger, radar, populateTrackDisplays};

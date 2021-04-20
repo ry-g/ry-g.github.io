@@ -1,7 +1,7 @@
 'use strict';
 // import * as ML from '/js/lib/ml.min.js';
 import {forceCluster, forceCollide} from './core_modules/bcForces.js';
-import {dragger, nodeEventHandler, radar} from "./core_modules/eventHandlers.js";
+import {dragger, nodeEventHandler, radar, populateTrackDisplays} from "./core_modules/eventHandlers.js";
 import {
     addBackgroud,
     bPanel,
@@ -32,8 +32,8 @@ const cat30 =[//https://mokole.com/palette.html
 const fFormat = d3.format(".2f")
 const LABELS = ["acousticness", "danceability", "energy", "instrumentalness", "speechiness", "liveness", "valence"]
 
-function restore(initialData){
-    const initialNodeCount = Math.min(1000, initialData.length);
+function restore(initialData, initCount=1000){
+    const initialNodeCount = Math.min(initCount, initialData.length);
    // const labels=["acousticness", "danceability", "energy", "instrumentalness", "speechiness", "liveness", "valence"]
     const slideMap = new Map(LABELS.map(L=>([L,0.0])))
     // create array of objects containing only track audio features
@@ -54,6 +54,7 @@ function restore(initialData){
 }
 
 // const nbrData = d3.dsv(",","./data/full.edgelist",(d,i)=>({source: +d.source, target: +d.target, dist: +d.dist}))
+// const metaData = d3.dsv(";","./data/full_pop50.csv", (d,i)=>({
 const metaData = d3.dsv(";","./data/full_pop50.csv", (d,i)=>({
     source: +d[""],
     id: d.id,
@@ -89,7 +90,7 @@ function ready(error, metaData) {
     let node = netGroup.append("g").attr("class","nodegroup").selectAll(".qnode")
     const zoom = d3.zoom().on("zoom", (event, d) => netGroup.attr("transform",event.transform));
     background.call(zoom);
-    const DATALEN = 2000;//metaData.length
+    const DATALEN = 1000;//metaData.length
     //console.log({edgeData,metaData})
 
     //const DSubset = metaData.slice(0,5000) //Pre-slicing the data is **Significantly** faster
@@ -98,9 +99,10 @@ function ready(error, metaData) {
     const dataCopySlice = ((n) => JSON.parse(JSON.stringify(metaData.slice(0,n))))
     const dataCopy = ((inds) => JSON.parse(JSON.stringify(metaData.filter((d,i)=>inds.includes(i)))))
 
-    console.log({"nodeMetaData": dataCopySlice})
-
     const _initialData = dataCopySlice()
+    //const queryData = _initialData.map(d=>({source:d.source,text: (d.name+ " :: "+d.artists.join("; ")).toLowerCase()}))
+    const qData = _initialData.map(d=>({ source: d.source, name: d.name.toLowerCase(), artists: d.artists.join("; ").toLowerCase()}))
+
     let [sliderValMap, dataFeatures, featureMap] = restore(_initialData)
     const color = d3.scaleOrdinal(_initialData.map(d=>d.group), cat30)
     let grpData = ({children: Array.from(d3.group(_initialData, d=> d.group), ([, children])=>({children}))})
@@ -109,7 +111,7 @@ function ready(error, metaData) {
         (d3.hierarchy(gData).sum(d => d.similarity))//.sort((a, b) =>  a.value - b.value))//.count())
 
     let nodes = pack(grpData).leaves();
-    console.log({nodes})
+
     const simulation = d3.forceSimulation(nodes)
         // .force("center", d3.forceCenter(WIDTH / 2,HEIGHT / 2).strength(0.01))
         .force("x", d3.forceX(WIDTH / 2).strength(0.01))
@@ -121,6 +123,12 @@ function ready(error, metaData) {
         .alphaDecay(0.01)
         .on("tick",tick)
 
+    // console.log({dataCopy, dataCopySlice})
+    // console.log({dataFeatures, featureMap})
+    console.log({_initialData})
+    // console.log({nodes})
+    // const trackData = _initialData.slice()//new Map(Object.entries(_initialData.map(d=>({[d.source]: {...d}}))))
+
 
     function extractFeatures(d){
         const v = d?.data??d
@@ -128,7 +136,6 @@ function ready(error, metaData) {
     }
 
     function getSliderValues(source="valMap"){
-
         //const [nodeMax, ...sliderValues] = d3.selectAll(".slider-group input").nodes().map(d=>+d.value)
         //return [nodeMax, ...sliderValues]
         let returnData;
@@ -155,12 +162,12 @@ function ready(error, metaData) {
     }
 
     function topN(n){
-        const [nMax, ...slideVals] = getSliderValues("valMap")
+        const [nMax, ...slideVals] = getSliderValues("raw")
         //const mostSimilar = [...featureMap].map(([k,v])=>[ML.Similarity.cosine(v,slideVals),k])
 
         const idxMostSimilar = [...featureMap].map(([k,v])=>[cosine(v,slideVals),k])
             .sort((a,b)=>b[0]-a[0]).map(d=>d[1]).slice(0,n)
-
+        console.log(idxMostSimilar)
         return dataCopy(idxMostSimilar)//.filter((d,i)=>mostSimilar.includes(i))
     }
 
@@ -179,7 +186,7 @@ function ready(error, metaData) {
 
     function similarity(d){
         //const slideDist = ML.Distance.euclidean(extractFeatures(d),[...threshMap.values()])
-        const [nMax, ...slideVals] = getSliderValues("valMap")
+        const [nMax, ...slideVals] = getSliderValues("raw")//"valMap")
         return cosine(extractFeatures(d),slideVals)
         //return ML.Similarity.cosine(extractFeatures(d),[...sliderValMap.values()])
     }
@@ -237,8 +244,8 @@ function ready(error, metaData) {
         d3.select("#track-merge >span").text(d3.selectAll('.frozen').data().length)
     }
 
-    const [slider,slideDiv] = initializeSliders(sliderValMap, DATALEN)
-    refresh(dataCopySlice(1000))
+    const [slider,slideDiv] = initializeSliders(sliderValMap, DATALEN, 500)
+    refresh(dataCopySlice(500))
 
     const isFilterMode = () => d3.select("#filter-mode > span").classed("--active");
 
@@ -306,7 +313,7 @@ function ready(error, metaData) {
     d3.select("#track-merge").on('click', (e,d) => d3.selectAll('.frozen').data().length > 0 ? clickMerge(e,d) : null)
     d3.select("#simulation-pause").on('click',clickPause)
 
-    const toLabeled = sliderValues => new Map(d3.zip(LABELS, sliderValues));
+    const toLabeled = (sliderValues) => new Map(d3.zip(LABELS, sliderValues));
 
     function update(){
         const [nodeMax, ...sliderValues] = getSliderValues("raw")
@@ -315,7 +322,7 @@ function ready(error, metaData) {
         let ndClone = topN(nodeMax)
         if (isFilterMode() === true){
             for (let [key, value] of namedValues) {
-                ndClone = ndClone.filter(d => d[key] >= value)
+                ndClone = ndClone.filter(d => (d[key] >= +value))
             }
         }
         refresh(ndClone)
@@ -332,33 +339,63 @@ function ready(error, metaData) {
             sliderValMap.set(filterAttr,nVal)
             d3.select(event.target.parentNode).select("output").text(fFormat(nVal))
         }
-        //simulation.stop()
-        // let ndClone = topN(nMax)//nmData(nMax)
-        // if (isFilterMode() === true){
-        //     for (let [key, value] of sliderValMap) {
-        //         ndClone = ndClone.filter(d => d[key] >= value)
-        //     }
-        // }
-
-        // refresh(ndClone)
-        //();
-        //simulation.alpha(0.1).restart()
-        //console.log({nVal,nodes,links, threshMap})
     }
     //console.log({node})
     slider.on("input", (event, d) => slideFilter("maxnode", event, d)).on("change", update)
     slideDiv.selectAll("input").on("input", (event, d) => slideFilter(d[0], event, d)).on("change", update)
 
 
-    d3.select('.search-inp').on("input", function (event){
-        const inputText = this.value.toLowerCase()
-        //console.log({event,inputText})
-        //TODO: Fix this hack and actually filter the nodes non-cosmetically
-        node.filter(d=>d.data.name.toLowerCase().includes(inputText)).selectAll("circle").classed("--hidden",false)
-        node.filter(d=>!(d.data.name.toLowerCase().includes(inputText))).selectAll("circle").classed("--hidden",true)
-        //console.log(inputText)
+    // function compare(query){
+    //     const qlower = query.toLowerCase()
+    //     console.time('searchObj')
+    //     queryData.filter(d=>d.text.includes(qlower))
+    //     console.timeEnd('searchObj')
+    //
+    //     // console.time('searchArr')
+    //     // qDataArray.filter(d=>d.includes(qlower))
+    //     // console.timeEnd('searchArr')
+    // }
+    function qSearch(query){
+        // const qLower = query.toLowerCase()
+        //return queryData.filter(d=>d.text.includes(query)).map(d=>d.source)
+        //return qData.filter(d=>d.name.includes(query)||d.artists.includes(query))
+        return qData.filter(d=>d.name.includes(query))
+    }
 
-    })
+    const searchList = d3.select('.search-results').append('ul')
+    d3.select('.search-inp').on("input", function (event){
+        //console.log(event)
+        const inputText = this.value.toLowerCase()
+
+        d3.select('.search-results').transition().duration(200).style("opacity",1).style("display","block")
+
+        //<li><span class="badge badge-subtle">artist</span>It's Beginning to Look a Lot like Christmas</li>
+        const results = qSearch(inputText).slice(0,5)
+
+        searchList.selectAll('li')
+            .data(results, d=>d.source)
+            .join('li')
+            .on("mousedown", (event, d) => {
+                setSliderValues(featureMap.get(d.source))
+                const track = {...dataCopy([+d.source])[0], similarity:  1.0}//track['similarity'] = 1.0//similarity(track)
+                populateTrackDisplays(track)
+            })
+            .text(d=>d.name)
+
+        // lis.text(d=>d.name.includes(inputText) ? d.name : d.artists)
+        // lis.append('span')
+        //     .classed("badge badge-subtle", true)
+        //     .text(d=>d.name.includes(inputText) ? 'track' : 'artists')
+
+
+        //node.filter(d=>d.data.name.toLowerCase().includes(inputText)).selectAll("circle").classed("--hidden",false)
+        //node.filter(d=>!(d.data.name.toLowerCase().includes(inputText))).selectAll("circle").classed("--hidden",true)
+        //searchList.selectAll("li").on("mousedown", (event, d) => setSliderValues(featureMap.get(d.source)))
+
+    }).on("focus", (event, d) => $('.search-results').slideDown(500))//.transition().duration(600).style("height","auto").style("opacity",1).style("display","block"))
+        .on("blur", (event,d) => $('.search-results').slideUp(500))//d3.select('.search-results').transition().duration(600).style("height","0px").style("opacity",0).style("display","none"))
+
+
 
 
     function tick() {
