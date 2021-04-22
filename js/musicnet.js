@@ -55,7 +55,7 @@ function restore(initialData, initCount=1000){
 
 // const nbrData = d3.dsv(",","./data/full.edgelist",(d,i)=>({source: +d.source, target: +d.target, dist: +d.dist}))
 // const metaData = d3.dsv(";","./data/full_pop50.csv", (d,i)=>({
-const metaData = d3.dsv(";","./data/full_pop50.csv", (d,i)=>({
+const metaData = d3.dsv(";","./data/samp_pop50.csv", (d,i)=>({
     source: +d[""],
     id: d.id,
     preview_url: d.preview_url !== "" ? d.preview_url : "NA",
@@ -125,7 +125,7 @@ function ready(error, metaData) {
 
     // console.log({dataCopy, dataCopySlice})
     // console.log({dataFeatures, featureMap})
-    console.log({_initialData})
+    //console.log({_initialData})
     // console.log({nodes})
     // const trackData = _initialData.slice()//new Map(Object.entries(_initialData.map(d=>({[d.source]: {...d}}))))
 
@@ -166,8 +166,9 @@ function ready(error, metaData) {
         //const mostSimilar = [...featureMap].map(([k,v])=>[ML.Similarity.cosine(v,slideVals),k])
 
         const idxMostSimilar = [...featureMap].map(([k,v])=>[cosine(v,slideVals),k])
-            .sort((a,b)=>b[0]-a[0]).map(d=>d[1]).slice(0,n)
-        console.log(idxMostSimilar)
+            .sort(d3.descending).map(d=>d[1]).slice(0,n)
+            //.sort((a,b)=>b[0]-a[0]).map(d=>d[1]).slice(0,n)
+        //.log(idxMostSimilar)
         return dataCopy(idxMostSimilar)//.filter((d,i)=>mostSimilar.includes(i))
     }
 
@@ -243,9 +244,9 @@ function ready(error, metaData) {
         d3.select('#track-count').text(nodes.length)
         d3.select("#track-merge >span").text(d3.selectAll('.frozen').data().length)
     }
-
-    const [slider,slideDiv] = initializeSliders(sliderValMap, DATALEN, 500)
-    refresh(dataCopySlice(500))
+    const INIT_SIZE = 500
+    const [slider,slideDiv] = initializeSliders(sliderValMap, DATALEN, INIT_SIZE)
+    refresh(dataCopySlice(INIT_SIZE))
 
     const isFilterMode = () => d3.select("#filter-mode > span").classed("--active");
 
@@ -253,7 +254,7 @@ function ready(error, metaData) {
         [sliderValMap, dataFeatures, featureMap] = restore(dataCopySlice())
         d3.select("#filter-mode > span").classed("--active",  false)
 
-        refresh(dataCopySlice(1000))
+        refresh(dataCopySlice(INIT_SIZE))
     }
     function clickFilter(event,d){
         //isFilterMode = !isFilterMode
@@ -320,11 +321,13 @@ function ready(error, metaData) {
         //console.log({nodeMax, sliderValues})
         const namedValues = toLabeled(sliderValues)
         let ndClone = topN(nodeMax)
+
         if (isFilterMode() === true){
             for (let [key, value] of namedValues) {
-                ndClone = ndClone.filter(d => (d[key] >= +value))
+                ndClone = ndClone.filter(d => (d[key] >= ((+value)-0.1)))
             }
         }
+
         refresh(ndClone)
 
     }
