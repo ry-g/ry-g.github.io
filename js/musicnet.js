@@ -43,7 +43,7 @@ function restore(initialData, initCount=1000){
     const featMap = new Map(dataFeats.map(d=>([d.source, [...Object.values(d).slice(1,)]])))
 
     // set defaults for threshMap as minimum value to propagate to slider values
-    slideMap.forEach((value, key) => slideMap.set(key,d3.min(dataFeats, d=>d[key])))
+    slideMap.forEach((value, key) => slideMap.set(key,d3.mean(dataFeats, d=>d[key])))
 
     const slideGroup = d3.selectAll(".slider-group").data([initialNodeCount,...slideMap.values()])
     slideGroup.select("input").property("value",d=>d)
